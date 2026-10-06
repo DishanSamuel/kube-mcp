@@ -1,0 +1,5 @@
+.env
+deploy/secrets.yaml
+bin/
+__pycache__/
+*.pyc

@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kube-log-mcp-deployment
+  namespace: prod
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kube-log-mcp
+  template:
+    metadata:
+      labels:
+        app: kube-log-mcp
+    spec:
+      serviceAccountName: kube-log-mcp-sa
+      # Defense-in-depth: run as non-root
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        # The Slack Agent Runner – orchestrates Claude + MCP gateway
+        - name: agent-runner
+          image: your-registry/kube-log-mcp-agent:latest
+          env:
+            - name: GATEWAY_BINARY_PATH
+              value: "/shared/gateway"
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kube-log-mcp-secrets
+                  key: slack-bot-token
+            - name: SLACK_APP_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: kube-log-mcp-secrets
+                  key: slack-app-token
+            - name: ANTHROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kube-log-mcp-secrets
+                  key: anthropic-api-key
+            # Optional: restrict to specific incident channel IDs (comma-separated)
+            # - name: INCIDENT_CHANNELS
+            #   value: "C0123456789,C9876543210"
+            - name: LOG_LEVEL
+              value: "INFO"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          volumeMounts:
+            - name: shared-bin
+              mountPath: /shared
+
+      # The Init Container copies the static Go gateway binary into /shared
+      # so the agent-runner container can execute it via standard I/O (STDIO)
+      initContainers:
+        - name: gateway-copier
+          image: your-registry/kube-log-mcp:latest
+          command: ["/gateway", "--install", "/shared/gateway"]
+          volumeMounts:
+            - name: shared-bin
+              mountPath: /shared
+
+      volumes:
+        - name: shared-bin
+          emptyDir: {}

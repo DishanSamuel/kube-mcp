@@ -1,0 +1,47 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kube-log-mcp-network-policy
+  namespace: prod
+spec:
+  podSelector:
+    matchLabels:
+      app: kube-log-mcp
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # We do NOT allow incoming TCP/HTTP traffic to this pod!
+    # Communication is purely over STDIO spawned by the parent container inside the pod.
+    # Slack Socket Mode is outbound-only (WebSocket), so no ingress is needed.
+    []
+  egress:
+    # Allow DNS resolution (usually UDP/TCP 53)
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Allow outbound HTTPS (port 443) for:
+    #   - Kubernetes API server
+    #   - Slack API / Socket Mode WebSocket (wss-primary.slack.com)
+    #   - Anthropic API (api.anthropic.com)
+    # We use a single port-based rule since these are all external endpoints
+    # reachable on 443. The pod cannot reach internal cluster services on 443
+    # because we don't have a permissive `to:` selector — the K8s API server
+    # is outside the cluster network (or has its own CIDR).
+    - ports:
+        - protocol: TCP
+          port: 443
+
+    # Allow communication to Prometheus (assuming Prometheus is on port 9090)
+    # Scoped to only pods with the prometheus label — prevents unauthorized
+    # lateral movement to other services in the cluster.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090

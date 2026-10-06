@@ -1,0 +1,7 @@
+# Slack ChatOps Agent for kube-log-mcp
+# Pinned dependencies for reproducible builds
+
+slack-bolt==1.22.0
+slack-sdk==3.35.0
+anthropic==0.52.0
+python-dotenv==1.1.0
